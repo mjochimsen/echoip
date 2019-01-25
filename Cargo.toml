@@ -1,0 +1,7 @@
+[package]
+name = "echoip"
+version = "0.1.0"
+authors = ["Michael Jochimsen <mlj@troglodytics.org>"]
+edition = "2018"
+
+[dependencies]
