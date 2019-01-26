@@ -85,7 +85,7 @@ impl ServerConfig {
 
         let address = match matches.value_of("ADDRESS") {
             Some(val) => val.parse::<Ipv4Addr>().unwrap(),
-            None => Ipv4Addr::new(0, 0, 0, 0),
+            None => Ipv4Addr::UNSPECIFIED,
         };
         let port = match matches.value_of("port") {
             Some(val) => val.parse::<u16>().unwrap(),
@@ -211,21 +211,17 @@ mod tests {
 
     #[test]
     fn parse_client_cli() {
-        let addr = "1.2.3.4".parse::<Ipv4Addr>().unwrap();
-
-        let args = vec!["echoip", "1.2.3.4"];
+        let args = vec!["echoip", "127.0.0.1"];
         let config = ClientConfig::parse_args(args);
-        assert_eq!(config.address, addr);
+        assert_eq!(config.address, Ipv4Addr::LOCALHOST);
         assert_eq!(config.port, DEFAULT_PORT);
     }
 
     #[test]
     fn parse_client_cli_with_port() {
-        let addr = "1.2.3.4".parse::<Ipv4Addr>().unwrap();
-
-        let args = vec!["echoip", "--port", "12345", "1.2.3.4"];
+        let args = vec!["echoip", "--port", "12345", "127.0.0.1"];
         let config = ClientConfig::parse_args(args);
-        assert_eq!(config.address, addr);
+        assert_eq!(config.address, Ipv4Addr::LOCALHOST);
         assert_eq!(config.port, 12345);
     }
 
@@ -233,7 +229,7 @@ mod tests {
     fn parse_server_cli() {
         let args = vec!["echoipd"];
         let config = ServerConfig::parse_args(args);
-        assert_eq!(config.address, Ipv4Addr::new(0, 0, 0, 0));
+        assert_eq!(config.address, Ipv4Addr::UNSPECIFIED);
         assert_eq!(config.port, DEFAULT_PORT);
     }
 
@@ -241,7 +237,7 @@ mod tests {
     fn parse_server_cli_with_addr() {
         let args = vec!["echoipd", "127.0.0.1"];
         let config = ServerConfig::parse_args(args);
-        assert_eq!(config.address, Ipv4Addr::new(127, 0, 0, 1));
+        assert_eq!(config.address, Ipv4Addr::LOCALHOST);
         assert_eq!(config.port, DEFAULT_PORT);
     }
 
@@ -249,7 +245,7 @@ mod tests {
     fn parse_server_cli_with_port() {
         let args = vec!["echoipd", "--port", "12345"];
         let config = ServerConfig::parse_args(args);
-        assert_eq!(config.address, Ipv4Addr::new(0, 0, 0, 0));
+        assert_eq!(config.address, Ipv4Addr::UNSPECIFIED);
         assert_eq!(config.port, 12345);
     }
 }
