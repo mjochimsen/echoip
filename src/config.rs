@@ -1,4 +1,18 @@
 use clap::Arg;
+use std::net::Ipv4Addr;
+
+pub fn arg_address(help: &str) -> Arg {
+    Arg::with_name("ADDRESS")
+        .validator(valid_address)
+        .help(help)
+}
+
+fn valid_address(val: String) -> Result<(), String> {
+    match val.parse::<Ipv4Addr>() {
+        Ok(_) => Ok(()),
+        Err(_) => Err("Not a valid IP address".to_string()),
+    }
+}
 
 pub fn arg_port(help: &str) -> Arg {
     Arg::with_name("port")
@@ -21,6 +35,61 @@ fn valid_port(val: String) -> Result<(), String> {
 mod tests {
     use super::*;
     use clap::{App, ErrorKind};
+
+    #[test]
+    fn parse_valid_address() {
+        let tester = App::new("test_addr").arg(arg_address("test"));
+        let args = vec!["test_addr", "1.2.3.4"];
+        let result = tester.get_matches_from_safe(args);
+        assert!(result.is_ok());
+        let matches = result.unwrap();
+        let address = matches.value_of("ADDRESS");
+        assert!(address.is_some());
+        assert_eq!(address.unwrap(), "1.2.3.4");
+    }
+
+    #[test]
+    fn parse_missing_address() {
+        let tester = App::new("test_addr").arg(arg_address("test"));
+        let args = vec!["test_addr"];
+        let result = tester.get_matches_from_safe(args);
+        assert!(result.is_ok());
+        let matches = result.unwrap();
+        let address = matches.value_of("ADDRESS");
+        assert!(address.is_none());
+    }
+
+    #[test]
+    fn parse_invalid_address() {
+        let tester = App::new("test_addr").arg(arg_address("test"));
+        let args = vec!["test_addr", "abcd"];
+        let result = tester.get_matches_from_safe(args);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.kind, ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn parse_out_of_range_address() {
+        let tester = App::new("test_addr").arg(arg_address("test"));
+        let args = vec!["test_addr", "127.0.0.256"];
+        let result = tester.get_matches_from_safe(args);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.kind, ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn help_text_for_address() {
+        let tester = App::new("test_addr")
+            .arg(arg_address("test_message"));
+        let args = vec!["test_addr", "--help"];
+        let result = tester.get_matches_from_safe(args);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.kind, ErrorKind::HelpDisplayed);
+        assert!(error.message.contains("test_message"));
+    }
 
     #[test]
     fn parse_valid_port() {
