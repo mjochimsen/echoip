@@ -49,19 +49,50 @@ impl ClientConfig {
         let matches = App::new("echoip")
             .about("Gets the public IP address of the caller")
             .version(crate_version!())
-            .arg(arg_port("The port number to use on the echo server"))
             .arg(arg_address("The IP address of the echo server")
                  .required(true))
+            .arg(arg_port("The port number to use on the echo server"))
             .get_matches_from(args);
 
+        let address = matches.value_of("ADDRESS").unwrap()
+            .parse::<Ipv4Addr>().unwrap();
         let port = match matches.value_of("port") {
             Some(val) => val.parse::<u16>().unwrap(),
             None => DEFAULT_PORT,
         };
-        let address = matches.value_of("ADDRESS").unwrap()
-            .parse::<Ipv4Addr>().unwrap();
 
         ClientConfig { address, port }
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct ServerConfig {
+    pub address: Ipv4Addr,
+    pub port: u16,
+}
+
+impl ServerConfig {
+    pub fn parse_args<I, T>(args: I) -> ServerConfig
+        where I: IntoIterator<Item = T>,
+              T: Into<OsString> + Clone {
+
+        let matches = App::new("echoipd")
+            .about("Returns the public IP address of any connection")
+            .version(crate_version!())
+            .arg(arg_address("The IP address to listen on"))
+            .arg(arg_port("The port number to listen on"))
+            .get_matches_from(args);
+
+        let address = match matches.value_of("ADDRESS") {
+            Some(val) => val.parse::<Ipv4Addr>().unwrap(),
+            None => Ipv4Addr::new(0, 0, 0, 0),
+        };
+        let port = match matches.value_of("port") {
+            Some(val) => val.parse::<u16>().unwrap(),
+            None => DEFAULT_PORT,
+        };
+
+        ServerConfig { address, port }
     }
 }
 
@@ -195,6 +226,30 @@ mod tests {
         let args = vec!["echoip", "--port", "12345", "1.2.3.4"];
         let config = ClientConfig::parse_args(args);
         assert_eq!(config.address, addr);
+        assert_eq!(config.port, 12345);
+    }
+
+    #[test]
+    fn parse_server_cli() {
+        let args = vec!["echoipd"];
+        let config = ServerConfig::parse_args(args);
+        assert_eq!(config.address, Ipv4Addr::new(0, 0, 0, 0));
+        assert_eq!(config.port, DEFAULT_PORT);
+    }
+
+    #[test]
+    fn parse_server_cli_with_addr() {
+        let args = vec!["echoipd", "127.0.0.1"];
+        let config = ServerConfig::parse_args(args);
+        assert_eq!(config.address, Ipv4Addr::new(127, 0, 0, 1));
+        assert_eq!(config.port, DEFAULT_PORT);
+    }
+
+    #[test]
+    fn parse_server_cli_with_port() {
+        let args = vec!["echoipd", "--port", "12345"];
+        let config = ServerConfig::parse_args(args);
+        assert_eq!(config.address, Ipv4Addr::new(0, 0, 0, 0));
         assert_eq!(config.port, 12345);
     }
 }
