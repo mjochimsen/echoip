@@ -1,7 +1,9 @@
-use clap::Arg;
 use std::net::Ipv4Addr;
+use std::ffi::OsString;
 
-pub fn arg_address(help: &str) -> Arg {
+use clap::{App, Arg, crate_version};
+
+fn arg_address(help: &str) -> Arg {
     Arg::with_name("ADDRESS")
         .validator(valid_address)
         .help(help)
@@ -14,7 +16,7 @@ fn valid_address(val: String) -> Result<(), String> {
     }
 }
 
-pub fn arg_port(help: &str) -> Arg {
+fn arg_port(help: &str) -> Arg {
     Arg::with_name("port")
         .short("p")
         .long("port")
@@ -28,6 +30,38 @@ fn valid_port(val: String) -> Result<(), String> {
     match val.parse::<u16>() {
         Ok(_) => Ok(()),
         Err(_) => Err("Not a valid port number".to_string()),
+    }
+}
+
+const DEFAULT_PORT: u16 = 5300;
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct ClientConfig {
+    pub address: Ipv4Addr,
+    pub port: u16,
+}
+
+impl ClientConfig {
+    pub fn parse_args<I, T>(args: I) -> ClientConfig
+        where I: IntoIterator<Item = T>,
+              T: Into<OsString> + Clone {
+
+        let matches = App::new("echoip")
+            .about("Gets the public IP address of the caller")
+            .version(crate_version!())
+            .arg(arg_port("The port number to use on the echo server"))
+            .arg(arg_address("The IP address of the echo server")
+                 .required(true))
+            .get_matches_from(args);
+
+        let port = match matches.value_of("port") {
+            Some(val) => val.parse::<u16>().unwrap(),
+            None => DEFAULT_PORT,
+        };
+        let address = matches.value_of("ADDRESS").unwrap()
+            .parse::<Ipv4Addr>().unwrap();
+
+        ClientConfig { address, port }
     }
 }
 
@@ -142,5 +176,25 @@ mod tests {
         let error = result.unwrap_err();
         assert_eq!(error.kind, ErrorKind::HelpDisplayed);
         assert!(error.message.contains("test_message"));
+    }
+
+    #[test]
+    fn parse_client_cli() {
+        let addr = "1.2.3.4".parse::<Ipv4Addr>().unwrap();
+
+        let args = vec!["echoip", "1.2.3.4"];
+        let config = ClientConfig::parse_args(args);
+        assert_eq!(config.address, addr);
+        assert_eq!(config.port, DEFAULT_PORT);
+    }
+
+    #[test]
+    fn parse_client_cli_with_port() {
+        let addr = "1.2.3.4".parse::<Ipv4Addr>().unwrap();
+
+        let args = vec!["echoip", "--port", "12345", "1.2.3.4"];
+        let config = ClientConfig::parse_args(args);
+        assert_eq!(config.address, addr);
+        assert_eq!(config.port, 12345);
     }
 }
