@@ -12,7 +12,7 @@ pub enum Error {
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use Error::*;
+        use self::Error::*;
         match self {
             InvalidAddress(addr) =>
                 write!(f, "received invalid address {}", addr),
@@ -38,7 +38,7 @@ mod tests {
 
     #[test]
     fn test_error_format() {
-        use Error::*;
+        use self::Error::*;
 
         let v4addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
         let addr = SocketAddr::V4(v4addr);
