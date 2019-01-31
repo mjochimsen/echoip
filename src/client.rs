@@ -45,13 +45,8 @@ pub fn client(server_addr: Ipv4Addr, port: u16) {
     };
 
     // Decode data to IP address and print.
-    match decode_addr(echo_data) {
-        Ok(addr) => println!("{}", addr),
-        Err(e) => {
-            eprintln!("{}", e);
-            exit(1);
-        },
-    }
+    let addr = Ipv4Addr::from(echo_data);
+    println!("{}", addr);
 }
 
 fn bind_socket() -> Result<UdpSocket, Error> {
@@ -73,13 +68,15 @@ fn send(socket: &UdpSocket, addr: SocketAddrV4) -> Result<(), Error> {
 }
 
 fn recv_from(socket: &UdpSocket,
-             addr: SocketAddrV4) -> Result<Vec<u8>, Error> {
+             addr: SocketAddrV4) -> Result<[u8; 4], Error> {
     let mut buffer = [0u8; 16];
     match socket.recv_from(&mut buffer) {
         Ok((size, recv_addr)) =>
             if recv_addr == SocketAddr::V4(addr) {
                 if size == 4 {
-                    Ok(Vec::from(&buffer[0..size]))
+                    let mut addr_buffer = [0u8; 4];
+                    addr_buffer.copy_from_slice(&buffer[0..4]);
+                    Ok(addr_buffer)
                 } else {
                     Err(MismatchedRecvSize(addr, size, 4))
                 }
@@ -91,18 +88,6 @@ fn recv_from(socket: &UdpSocket,
             let addr = socket.local_addr().unwrap();
             Err(ReceiveFailure(addr))
         },
-    }
-}
-
-fn decode_addr(addr_data: Vec<u8>) -> Result<Ipv4Addr, Error> {
-    if addr_data.len() == 4 {
-        let mut addr_buffer = [0u8; 4];
-        addr_buffer.copy_from_slice(&addr_data[0..4]);
-        let addr = Ipv4Addr::from(addr_buffer);
-        Ok(addr)
-    } else {
-        let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
-        Err(MismatchedRecvSize(addr, addr_data.len(), 4))
     }
 }
 
@@ -172,7 +157,7 @@ mod tests {
         let result = recv_from(&client, server_addr);
         assert!(result.is_ok());
         let data = result.unwrap();
-        assert_eq!(data, vec![127, 0, 0, 1]);
+        assert_eq!(data, [127, 0, 0, 1]);
 
         let result = child.join();
         assert!(result.is_ok());
@@ -180,13 +165,5 @@ mod tests {
         assert!(send_result.is_ok());
         let size = send_result.unwrap();
         assert_eq!(size, 4);
-    }
-
-    #[test]
-    fn test_decode_addr() {
-        let result = decode_addr(vec![127, 0, 0, 1]);
-        assert!(result.is_ok());
-        let addr = result.unwrap();
-        assert_eq!(Ipv4Addr::LOCALHOST, addr);
     }
 }
