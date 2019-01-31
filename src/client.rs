@@ -1,6 +1,8 @@
 use std::net::*;
 use std::time::Duration;
 use std::process::exit;
+use super::error::Error;
+use super::error::Error::*;
 
 const RECV_TIMEOUT: u64 = 5;
 
@@ -56,7 +58,7 @@ fn bind_socket() -> Result<UdpSocket, Error> {
     let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
     let result = UdpSocket::bind(addr);
     if result.is_err() {
-        Err(Error::BindFailure(addr))
+        Err(BindFailure(addr))
     } else {
         Ok(result.unwrap())
     }
@@ -65,8 +67,8 @@ fn bind_socket() -> Result<UdpSocket, Error> {
 fn send(socket: &UdpSocket, addr: SocketAddrV4) -> Result<(), Error> {
     match socket.send_to(&[0u8; 0], addr) {
         Ok(0) => Ok(()),
-        Ok(sent) => Err(Error::MismatchedSend(addr, sent, 0)),
-        Err(_) => Err(Error::SendFailure(addr)),
+        Ok(sent) => Err(MismatchedSendSize(addr, sent, 0)),
+        Err(_) => Err(SendFailure(addr)),
     }
 }
 
@@ -76,14 +78,18 @@ fn recv_from(socket: &UdpSocket,
     match socket.recv_from(&mut buffer) {
         Ok((size, recv_addr)) =>
             if recv_addr == SocketAddr::V4(addr) {
-                Ok(Vec::from(&buffer[0..size]))
+                if size == 4 {
+                    Ok(Vec::from(&buffer[0..size]))
+                } else {
+                    Err(MismatchedRecvSize(addr, size, 4))
+                }
             } else {
                 let addr = socket.local_addr().unwrap();
-                Err(Error::ReceiveError(addr))
+                Err(ReceiveFailure(addr))
             },
         Err(_) => {
             let addr = socket.local_addr().unwrap();
-            Err(Error::ReceiveError(addr))
+            Err(ReceiveFailure(addr))
         },
     }
 }
@@ -95,36 +101,8 @@ fn decode_addr(addr_data: Vec<u8>) -> Result<Ipv4Addr, Error> {
         let addr = Ipv4Addr::from(addr_buffer);
         Ok(addr)
     } else {
-        Err(Error::MismatchedAddrData(addr_data.len(), 4))
-    }
-}
-
-#[derive(Clone, PartialEq, Debug)]
-enum Error {
-    BindFailure(SocketAddrV4),
-    ReceiveError(SocketAddr),
-    SendFailure(SocketAddrV4),
-    MismatchedSend(SocketAddrV4, usize, usize),
-    MismatchedAddrData(usize, usize),
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use Error::*;
-        match self {
-            BindFailure(addr) =>
-                write!(f, "unable to bind socket to {}", addr),
-            ReceiveError(addr) =>
-                write!(f, "error recieving data on {}", addr),
-            SendFailure(addr) =>
-                write!(f, "error sending data to {}", addr),
-            MismatchedSend(addr, size, expected) =>
-                write!(f, "sent {} bytes to {}, expected {} bytes",
-                       size, addr, expected),
-            MismatchedAddrData(size, expected) =>
-                write!(f, "{} bytes of address data, expected {} bytes",
-                       size, expected),
-        }
+        let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
+        Err(MismatchedRecvSize(addr, addr_data.len(), 4))
     }
 }
 
@@ -210,31 +188,5 @@ mod tests {
         assert!(result.is_ok());
         let addr = result.unwrap();
         assert_eq!(Ipv4Addr::LOCALHOST, addr);
-    }
-
-    #[test]
-    fn test_error_format() {
-        use Error::*;
-
-        let v4addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
-        let addr = SocketAddr::V4(v4addr);
-
-        let msg = format!("{}", BindFailure(v4addr));
-        assert!(msg.ends_with("127.0.0.1:0"));
-
-        let msg = format!("{}", ReceiveError(addr));
-        assert!(msg.ends_with("127.0.0.1:0"));
-
-        let msg = format!("{}", SendFailure(v4addr));
-        assert!(msg.ends_with("127.0.0.1:0"));
-
-        let msg = format!("{}", MismatchedSend(v4addr, 500, 1000));
-        assert!(msg.contains("127.0.0.1:0"));
-        assert!(msg.contains("500"));
-        assert!(msg.contains("1000"));
-
-        let msg = format!("{}", MismatchedAddrData(500, 1000));
-        assert!(msg.contains("500"));
-        assert!(msg.contains("1000"));
     }
 }
