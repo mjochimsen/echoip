@@ -1,4 +1,6 @@
 use std::net::*;
+use super::error::Error;
+use super::error::Error::*;
 
 pub fn server(addr: Ipv4Addr, port: u16) {
     let server_addr = SocketAddrV4::new(addr, port);
@@ -30,7 +32,7 @@ pub fn server(addr: Ipv4Addr, port: u16) {
 fn bind_socket(addr: SocketAddrV4) -> Result<UdpSocket, Error> {
     match UdpSocket::bind(addr) {
         Ok(socket) => Ok(socket),
-        Err(_) => Err(Error::BindFailure(addr)),
+        Err(_) => Err(BindFailure(addr)),
     }
 }
 
@@ -40,12 +42,12 @@ fn recv_addr(socket: &UdpSocket) -> Result<SocketAddrV4, Error> {
         Ok((_size, client_addr)) => {
             match client_addr {
                 SocketAddr::V4(addr) => Ok(addr),
-                SocketAddr::V6(addr) => Err(Error::InvalidAddress(addr)),
+                SocketAddr::V6(_) => Err(InvalidAddress(client_addr)),
             }
         },
         Err(_) => {
             let sock_addr = socket.local_addr().unwrap();
-            Err(Error::ReceiveError(sock_addr))
+            Err(ReceiveFailure(sock_addr))
         },
     }
 }
@@ -57,42 +59,15 @@ fn send_echo(socket: &UdpSocket,
         Ok(size) => {
             match size {
                 4 => Ok(()),
-                _ => Err(Error::ShortSend(addr, size)),
+                _ => Err(MismatchedSendSize(addr, size, 4)),
             }
         },
-        Err(_) => Err(Error::SendFailure(addr)),
+        Err(_) => Err(SendFailure(addr)),
     }
 }
 
 fn octets_from_v4_addr(sockaddr: SocketAddrV4) -> [u8; 4] {
     sockaddr.ip().octets()
-}
-
-#[derive(Clone, PartialEq, Debug)]
-enum Error {
-    BindFailure(SocketAddrV4),
-    ReceiveError(SocketAddr),
-    InvalidAddress(SocketAddrV6),
-    SendFailure(SocketAddrV4),
-    ShortSend(SocketAddrV4, usize),
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use Error::*;
-        match self {
-            BindFailure(addr) =>
-                write!(f, "unable to bind to {}", addr),
-            ReceiveError(addr) =>
-                write!(f, "error recieving data on {}", addr),
-            InvalidAddress(addr) =>
-                write!(f, "received invalid address {}", addr),
-            SendFailure(addr) => 
-                write!(f, "error sending data to {}", addr),
-            ShortSend(addr, size) =>
-                write!(f, "only sent {} of 4 bytes to {}", size, addr),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -171,30 +146,5 @@ mod tests {
     fn test_octets_from_v4_addr() {
         let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
         assert_eq!(octets_from_v4_addr(addr), [127, 0, 0, 1]);
-    }
-
-    #[test]
-    fn test_error_format() {
-        use Error::*;
-
-        let v4addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
-        let v6addr = SocketAddrV6::new(Ipv6Addr::LOCALHOST, 0, 0, 0);
-        let addr = SocketAddr::V4(v4addr);
-
-        let msg = format!("{}", BindFailure(v4addr));
-        assert!(msg.ends_with("127.0.0.1:0"));
-
-        let msg = format!("{}", ReceiveError(addr));
-        assert!(msg.ends_with("127.0.0.1:0"));
-
-        let msg = format!("{}", InvalidAddress(v6addr));
-        assert!(msg.ends_with("[::1]:0"));
-
-        let msg = format!("{}", SendFailure(v4addr));
-        assert!(msg.ends_with("127.0.0.1:0"));
-
-        let msg = format!("{}", ShortSend(v4addr, 3));
-        assert!(msg.ends_with("127.0.0.1:0"));
-        assert!(msg.contains("3 of 4"));
     }
 }
